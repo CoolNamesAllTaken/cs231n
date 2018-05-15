@@ -1,1 +1,4 @@
 data/
+*.pyc
+*.swo
+src/suction_based_grasping/baseline/__pycache
