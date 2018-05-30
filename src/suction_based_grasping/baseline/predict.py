@@ -17,107 +17,89 @@ def window_stdev(X, window_size):
 # from the RGB-D image (2) measure the variance of the surface normals
 # where higher variance = lower affordance.
 #
-# function [affordanceMap,surfaceNormalsMap] = predict(inputColor,inputDepth,backgroundColor,backgroundDepth,cameraIntrinsics)
+# function [affordance_map,surface_normals_map] = predict(input_color,input_depth,background_color,background_depth,camera_intrinsics)
 # Input:
-#   inputColor         - 480x640x3 float array of RGB color values
-#   inputDepth         - 480x640 float array of depth values in meters
-#   backgroundColor    - 480x640x3 float array of RGB color values 
-#   backgroundDepth    - 480x640 float array of depth values in meters
-#   cameraIntrinsics   - 3x3 camera intrinsics matrix
+#   input_color         - 480x640x3 float array of RGB color values
+#   input_depth         - 480x640 float array of depth values in meters
+#   background_color    - 480x640x3 float array of RGB color values 
+#   background_depth    - 480x640 float array of depth values in meters
+#   camera_intrinsics   - 3x3 camera intrinsics matrix
 # Output:
-#   affordanceMap      - 480x640 float array of affordance values in range [0,1]
-#   surfaceNormalsMap  - 480x640x3 float array of surface normals in camera coordinates (meters)
+#   affordance_map      - 480x640 float array of affordance values in range [0,1]
+#   surface_normals_map  - 480x640x3 float array of surface normals in camera coordinates (meters)
 
-def predict(inputColor, inputDepth, backgroundColor, backgroundDepth, cameraIntrinsics):
+def predict(input_color, input_depth, background_color, background_depth, camera_intrinsics):
 	print("Starting predict...")
 	# Scale color images between [0, 1]
-	# inputColor /= 255.
-	# backgroundColor /= 255.
-
-	# plt.figure()
-	# plt.imshow(inputColor)
-	# plt.axis('off')
-
-	# plt.figure()
-	# plt.imshow(inputDepth)
-	# plt.axis('off')
-
-	# plt.figure()
-	# plt.imshow(backgroundColor)
-	# plt.axis('off')
-
-	# plt.figure()
-	# plt.imshow(backgroundDepth)
-	# plt.axis('off')
+	# input_color /= 255.
+	# background_color /= 255.
 	
 	# Do background subtraction to get foreground mask
-	foregroundMaskColor = (np.sum(np.abs(inputColor - backgroundColor) < 0.3, axis=2) != 3) # mask pixels similar to background
-	foregroundMaskDepth = np.logical_and(backgroundDepth != 0, np.abs(inputDepth - backgroundDepth) > 0.02)
-	foregroundMask = np.logical_or(foregroundMaskColor, foregroundMaskDepth)
+	foreground_mask_color = (np.sum(np.abs(input_color - background_color) < 0.3, axis=2) != 3) # mask pixels similar to background
+	foreground_mask_depth = np.logical_and(background_depth != 0, np.abs(input_depth - background_depth) > 0.02)
+	foreground_mask = np.logical_or(foreground_mask_color, foreground_mask_depth)
 
 	# show masked image
 	# plt.figure()
-	# showImg = inputColor
-	# showImg[foregroundMask == False] = 0
+	# showImg = input_color
+	# showImg[foreground_mask == False] = 0
 	# plt.imshow(showImg)
 	# plt.axis('off')
 
 	# Project depth into camera space
-	[pixX, pixY] = np.meshgrid(list(range(640)), list(range(480)))
-	camX = (pixX - cameraIntrinsics[0, 2]) * inputDepth / cameraIntrinsics[0, 0]
-	camY = (pixY - cameraIntrinsics[1, 2]) * inputDepth / cameraIntrinsics[1, 1]
-	camZ = inputDepth
+	[pix_x, pix_y] = np.meshgrid(list(range(640)), list(range(480)))
+	cam_x = (pix_x - camera_intrinsics[0, 2]) * input_depth / camera_intrinsics[0, 0]
+	cam_y = (pix_y - camera_intrinsics[1, 2]) * input_depth / camera_intrinsics[1, 1]
+	cam_z = input_depth
 
 	# Only use points with valid depth and within foreground mask
-	validDepth = np.logical_and(foregroundMask, camZ != 0)
-	xPoints = camX[validDepth]
-	yPoints = camY[validDepth]
-	zPoints = camZ[validDepth]
+	valid_depth = np.logical_and(foreground_mask, cam_z != 0)
+	x_points = cam_x[valid_depth]
+	y_points = cam_y[valid_depth]
+	z_points = cam_z[valid_depth]
 
 	# repackage x, y, z lists into point tuples
-	numPoints = len(xPoints)
-	inputPoints = [(xPoints[i], yPoints[i], zPoints[i]) for i in range(numPoints)]
+	num_points = len(x_points)
+	input_points = [(x_points[i], y_points[i], z_points[i]) for i in range(num_points)]
 	
 	# Get foreground point cloud normals
-	foregroundPointcloud = pcl.PointCloud()
-	foregroundPointcloud.from_list(inputPoints)
-	foregroundNormals = calc_surface_normals(foregroundPointcloud)
+	foreground_point_cloud = pcl.PointCloud()
+	foreground_point_cloud.from_list(input_points)
+	foreground_normals = calc_surface_normals(foreground_point_cloud)
 
 	# Flip normals to point toward sensor
-	sensorCenter = np.zeros(3)
-	# did this weird because foregroundNormals has curvature, can't directly np.asarray it
-	foregroundPointcloudArray = np.asarray(foregroundPointcloud)
-	foregroundNormalsList = []
-	for i in range(len(inputPoints)):
-		foregroundNormalsList.append(np.asarray(foregroundNormals[i])[0:3]) # ignore curvature value (index 3)
-	foregroundNormalsArray = np.asarray(foregroundNormalsList)
-	# foregroundNormalsArray = np.asarray([np.asarray(foregroundNormals[i, 0:3]) for i in range(len(inputPoints))])
-	# inputPoints = inputPoints.T
-	for k in range(len(inputPoints)):
-		p1 = sensorCenter - foregroundPointcloudArray[k]
-		p2 = foregroundNormalsArray[k]
+	sensor_center = np.zeros(3)
+	# did this weird because foreground_normals has curvature, can't directly np.asarray it
+	foreground_point_cloud_array = np.asarray(foreground_point_cloud)
+	foreground_normals_list = []
+	for i in range(len(input_points)):
+		foreground_normals_list.append(np.asarray(foreground_normals[i])[0:3]) # ignore curvature value (index 3)
+	foreground_normals_array = np.asarray(foreground_normals_list)
+	for k in range(len(input_points)):
+		p1 = sensor_center - foreground_point_cloud_array[k]
+		p2 = foreground_normals_array[k]
 		angle = np.arctan2(p1.dot(p2.T), np.linalg.norm(np.cross(p1, p2)))
 		if angle <= np.pi / 2 and angle >= -np.pi / 2:
-			foregroundNormalsArray[k] *= -1
+			foreground_normals_array[k] *= -1
 
 	# Project normals back to image plane
-	inputPointsArray = np.asarray(inputPoints)
-	pixX = np.around((inputPointsArray[:, 0] * cameraIntrinsics[0, 0]) / (inputPointsArray[:, 2]) + cameraIntrinsics[0, 2]).astype(int)
-	pixY = np.around((inputPointsArray[:, 1] * cameraIntrinsics[1, 1]) / (inputPointsArray[:, 2]) + cameraIntrinsics[1, 2]).astype(int)
+	input_points_array = np.asarray(input_points)
+	pix_x = np.around((input_points_array[:, 0] * camera_intrinsics[0, 0]) / (input_points_array[:, 2]) + camera_intrinsics[0, 2]).astype(int)
+	pix_y = np.around((input_points_array[:, 1] * camera_intrinsics[1, 1]) / (input_points_array[:, 2]) + camera_intrinsics[1, 2]).astype(int)
 	# matlab does a weird linear indexing thing here, so just flatten and roll with it
-	surfaceNormalsMap = np.zeros_like(inputColor)
-	surfaceNormalsMapFlat = np.reshape(surfaceNormalsMap, (-1,)) # this is a little redundant but whatever
-	surfaceNormalsMapFlat[np.ravel_multi_index((pixY, pixX, np.zeros_like(pixY).astype(int)), surfaceNormalsMap.shape)] = foregroundNormalsArray[:, 0]
-	surfaceNormalsMapFlat[np.ravel_multi_index((pixY, pixX, np.ones_like(pixY).astype(int)), surfaceNormalsMap.shape)] = foregroundNormalsArray[:, 1]	
-	surfaceNormalsMapFlat[np.ravel_multi_index((pixY, pixX, 2 * np.ones_like(pixY).astype(int)), surfaceNormalsMap.shape)] = foregroundNormalsArray[:, 2]
-	surfaceNormalsMap = np.reshape(surfaceNormalsMapFlat, inputColor.shape) # reshape after that matlab imitation flattish thing
+	surface_normals_map = np.zeros_like(input_color)
+	surface_normals_map_flat = np.reshape(surface_normals_map, (-1,)) # this is a little redundant but whatever
+	surface_normals_map_flat[np.ravel_multi_index((pix_y, pix_x, np.zeros_like(pix_y).astype(int)), surface_normals_map.shape)] = foreground_normals_array[:, 0]
+	surface_normals_map_flat[np.ravel_multi_index((pix_y, pix_x, np.ones_like(pix_y).astype(int)), surface_normals_map.shape)] = foreground_normals_array[:, 1]	
+	surface_normals_map_flat[np.ravel_multi_index((pix_y, pix_x, 2 * np.ones_like(pix_y).astype(int)), surface_normals_map.shape)] = foreground_normals_array[:, 2]
+	surface_normals_map = np.reshape(surface_normals_map_flat, input_color.shape) # reshape after that matlab imitation flattish thing
 
 	# Compute standard deviation of local normals
-	meanStdNormals = np.mean(window_stdev(surfaceNormalsMap, 25) * np.sqrt((25 ** 2) / (25 ** 2 - 1)), axis=2)
-	affordanceMap = 1 - meanStdNormals / np.max(meanStdNormals)
-	affordanceMap[validDepth != True] = 0
+	mean_std_normals = np.mean(window_stdev(surface_normals_map, 25) * np.sqrt((25 ** 2) / (25 ** 2 - 1)), axis=2)
+	affordance_map = 1 - mean_std_normals / np.max(mean_std_normals)
+	affordance_map[valid_depth != True] = 0
 	print("Finished predict!")
-	return affordanceMap, surfaceNormalsMap
+	return affordance_map, surface_normals_map
 
 # from https://github.com/strawlab/python-pcl/blob/master/examples/sift.py
 def calc_surface_normals(cloud):
