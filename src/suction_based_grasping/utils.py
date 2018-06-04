@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pylab as plt
 
+data_path = '/home/shared/project/data'
+
 def read_split_file(split_filename):
 	"""
 	Loads image names based on a split file
@@ -9,7 +11,6 @@ def read_split_file(split_filename):
 	Output:
 		returns image names (stripped lines from split text file)
 	"""
-	data_path = '/home/shared/project/data'
 	filename = "{}/{}".format(data_path, split_filename)
 	with open(filename, 'r') as file:
 		lines = file.readlines()
@@ -25,7 +26,6 @@ def load_image(img_name, display=False):
 	Outputs:
 		returns a tuple of input_color, input_depth, background_color, background_depth, camera_intrinsics
 	"""
-	data_path = '/home/shared/project/data'
 	input_color = plt.imread("{}/color-input/{}.png".format(data_path, img_name))
 	input_depth = plt.imread("{}/depth-input/{}.png".format(data_path, img_name)) / 10000
 	background_color = plt.imread("{}/color-background/{}.png".format(data_path, img_name))
@@ -53,3 +53,58 @@ def load_image(img_name, display=False):
 
 	return input_color, input_depth, background_color, background_depth, camera_intrinsics
 
+def load_label(img_name, display=False):
+	"""
+	Loads a label image for a given image name
+	Inputs:
+		img_name = name of image label to load
+		display = whether to display the image label
+	Outputs:
+		returns image label
+	"""
+	label = plt.imread("{}/label/{}.png".format(data_path, img_name))
+
+	if display:
+		plt.figure()
+		plt.imshow(label)
+		plt.axis('off')
+
+	return label
+
+def train_test_split(train_split_filename, test_split_filename, verbose=True):
+	"""
+	Returns a training split and test split based on given text files
+	Inputs:
+		train_split_filename = name of file with training split filenames
+		test_split_filename = name of file with test split filenames
+	Outputs:
+		X_train = list of training images
+		X_test = list of test images
+		y_train = list of training image labels (heatmaps)
+		y_test = list of test image labels (heatmaps)
+	"""
+	if verbose: print("Loading Training Data from {}".format(train_split_filename))
+	train_img_names = read_split_file(train_split_filename)
+	num_train_imgs = len(train_img_names)
+	X_train = []
+	y_train = []
+	img_num = 0
+	for img_name in train_img_names:
+		img_num += 1
+		if verbose: print("{}/{}\t{:0.2f}%".format(img_num, num_train_imgs, img_num/num_train_imgs*100), end='\r')
+		X_train.append(load_image(img_name))
+		y_train.append(load_label(img_name))
+	if verbose: print("Done!")
+
+	if verbose: print("Loading Test Data from {}".format(test_split_filename))
+	test_img_names = read_split_file(test_split_filename)
+	X_test = []
+	y_test = []
+	img_num = 0
+	for img_name in test_img_names:
+		img_num += 1
+		if verbose: print("{}/{}\t{:0.2f}%".format(img_num, num_test_imgs, img_num/num_test_imgs*100), end='\r')
+		X_test.append(load_image(img_name))
+		y_test.append(load_image(img_name))
+	if verbose: print("Done!")
+	return X_train, X_test, y_train, y_test
