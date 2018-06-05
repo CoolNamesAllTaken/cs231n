@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pylab as plt
+import skimage
+from skimage import transform # for image resizing
 
 data_path = '/home/shared/project/data'
 
@@ -71,9 +73,32 @@ def load_label(img_name, display=False):
 
 	return label
 
-def train_test_split(train_split_filename, test_split_filename, verbose=True):
+def load_images_from_list(img_names, target_shape, verbose):
 	"""
-	Returns a training split and test split based on given text files
+	Helper function for train_test_split
+	"""
+	N = len(img_names)
+	H, W = target_shape
+	C = 6 # RGBDDD
+	X = np.empty((N, H, W, C))
+	y = np.empty((N, H, W))
+	for i in range(N):
+		if verbose: print("{}/{}\t{:0.2f}%".format(i+1, N, (i+1)/N*100), end='\r')
+		# load image (RGBD), ignore background RGBD and camera instrinsics
+		input_color, input_depth, _, _, _ = load_image(img_names[i])
+		input_color = skimage.transform.resize(input_color, (H, W, 3))
+		input_depth = skimage.transform.resize(input_depth, (H, W, 1))
+		X[i, :, :, 0:3] = input_color
+		X[i, :, :, 3:6] = np.repeat(input_depth, 3, axis=2)
+		label = load_label(img_names[i])
+		label = skimage.transform.resize(label, (H, W))
+		y[i, :, :] = label
+	return X, y
+
+def train_test_split(train_split_filename, test_split_filename, target_shape=(224, 224), verbose=True):
+	"""
+	Returns a training split and test split based on given text files.  Resizes images to be HxW (target_shape)
+	NOTE: target_shape initialized to default input size of ResNet50 (224, 224)
 	Inputs:
 		train_split_filename = name of file with training split filenames
 		test_split_filename = name of file with test split filenames
@@ -85,26 +110,35 @@ def train_test_split(train_split_filename, test_split_filename, verbose=True):
 	"""
 	if verbose: print("Loading Training Data from {}".format(train_split_filename))
 	train_img_names = read_split_file(train_split_filename)
-	num_train_imgs = len(train_img_names)
-	X_train = []
-	y_train = []
-	img_num = 0
-	for img_name in train_img_names:
-		img_num += 1
-		if verbose: print("{}/{}\t{:0.2f}%".format(img_num, num_train_imgs, img_num/num_train_imgs*100), end='\r')
-		X_train.append(load_image(img_name))
-		y_train.append(load_label(img_name))
+	X_train, y_train = load_images_from_list(train_img_names, target_shape, verbose)
 	if verbose: print("Done!")
 
 	if verbose: print("Loading Test Data from {}".format(test_split_filename))
 	test_img_names = read_split_file(test_split_filename)
-	X_test = []
-	y_test = []
-	img_num = 0
-	for img_name in test_img_names:
-		img_num += 1
-		if verbose: print("{}/{}\t{:0.2f}%".format(img_num, num_test_imgs, img_num/num_test_imgs*100), end='\r')
-		X_test.append(load_image(img_name))
-		y_test.append(load_image(img_name))
+	X_test, y_test = load_images_from_list(test_img_names, target_shape, verbose)
 	if verbose: print("Done!")
+
 	return X_train, X_test, y_train, y_test
+
+def train_val_split(X_train_all, y_train_all, train_frac):
+	"""
+	Splits a training data set into training and validation sets based on a train-val split equal to train_frac
+	Inputs:
+		x_train_all = full training set inputs
+		y_train_all = full training set labels
+	Outputs:
+		X_train = training set inputs
+		X_val = validation set inputs
+		y_train = training set labels
+		y_val = validation set labels
+	"""
+	N = X_train_all.shape[0]
+	num_train = int(train_frac * N)
+	num_val = N - num_train
+	train_inds = range(num_train)
+	val_inds = range(num_train, num_train+num_val)
+	X_train = X_train_all[train_inds]
+	y_train = y_train_all[train_inds]
+	X_val = X_train_all[val_inds]
+	y_val = y_train_all[val_inds]
+	return X_train, X_val, y_train, y_val
