@@ -29,7 +29,7 @@ def preprocess_label(label, target_shape):
 	label = skimage.transform.resize(label, (H, W))
 	label *= 2 # entries = [0, ??, 2]
 	label = np.around(label) # entries = [0, 1, 2]
-	label = to_categorical(label, num_classes=3)
+	# label = to_categorical(label, num_classes=3)
 	return label
 
 def load_images_from_list(img_names, target_shape, verbose):
@@ -40,7 +40,7 @@ def load_images_from_list(img_names, target_shape, verbose):
 	H, W = target_shape
 	X_color = np.empty((N, H, W, 3))
 	X_depth = np.empty((N, H, W, 3))
-	y = np.empty((N, H, W, 3))
+	y = np.empty((N, H, W))
 	for i in range(N):
 		if verbose: print("{}/{}\t{:0.2f}%".format(i+1, N, (i+1)/N*100), end='\r')
 		# load image (RGBD), ignore background RGBD and camera instrinsics
