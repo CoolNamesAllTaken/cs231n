@@ -40,7 +40,7 @@ def load_images_from_list(img_names, target_shape, verbose):
 	H, W = target_shape
 	X_color = np.empty((N, H, W, 3))
 	X_depth = np.empty((N, H, W, 3))
-	y = np.empty((N, H, W))
+	y = np.empty((N, H, W, 1)) # channel dim for dimension compatibility with keras (match y_pred)
 	for i in range(N):
 		if verbose: print("{}/{}\t{:0.2f}%".format(i+1, N, (i+1)/N*100), end='\r')
 		# load image (RGBD), ignore background RGBD and camera instrinsics
@@ -48,7 +48,7 @@ def load_images_from_list(img_names, target_shape, verbose):
 		X_color[i, :, :, :] = preprocess_color_img(input_color, target_shape)
 		X_depth[i, :, :, :] = preprocess_depth_img(input_depth, target_shape)
 		label = load_label(img_names[i])
-		y[i, :, :] = preprocess_label(label, target_shape)
+		y[i, :, :, :] = np.expand_dims(preprocess_label(label, target_shape), axis=3)
 		X = [X_color, X_depth]
 	return X, y
 
