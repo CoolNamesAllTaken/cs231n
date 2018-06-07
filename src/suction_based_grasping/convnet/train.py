@@ -1,33 +1,34 @@
 import numpy as np
-import matplotlib.pyplot as plt
-
 import tensorflow as tf
+import matplotlib.pyplot as plt
+import os
 
-import keras
-from keras.applications.resnet50 import ResNet50
-from keras.models import Sequential, Model
-from keras.layers import *
-
-# NOTE: assumes notebook is run from project directory
 from src.suction_based_grasping.utils import *
+from src.suction_based_grasping.convnet.model import *
+from src.suction_based_grasping.convnet.data_utils import *
 
-def init_model(image_shape):
-	H, W = image_shape
-	# ResNet50 rgb model
-	resnet_color = ResNet50(include_top=False, pooling=None, input_shape=(H, W, 3), weights='imagenet')
-	
-	# ResNet50 ddd model
-	resnet_depth = ResNet50(include_top=False, pooling=None, input_shape=(H, W, 3), weights='imagenet')
-	for layer in resnet_depth.layers:
-		layer.name = layer.name + '_depth'
-	
-	# model with parallel ResNet models and merged output
-	merged_out = Add()([resnet_color.output, resnet_depth.output]) # merged output from rgb and ddd resnets
-	resnet_rgbddd = Model([resnet_color.input, resnet_depth.input], merged_out)
-	x = Conv2D(12, 4, strides=1, padding='same', activation='relu', use_bias=True)(resnet_rgbddd.output)
-	x = Conv2D(12, 4, strides=1, padding='same', activation='relu', use_bias=True)(x)
-	merged_out = Conv2D(12, 4, strides=1, padding='same', activation='softmax', use_bias=True)(x)
-	
-	combined_model = Model([resnet_color.input, resnet_depth.input], merged_out)
-	combined_model.compile('adam', loss='categorical_crossentropy', metrics=['accuracy'])
-	
+from keras import models # for load_model
+
+X_target_shape = (960, 1280) # height and width of inputs to ResNet50
+y_target_shape = (480, 640)
+model_filepath = '/home/shared/project/src/suction_based_grasping/convnet/models'
+
+train_batch_size = 2
+val_batch_size = 2
+validation_split = 0.2
+
+def train():
+	model = init_model(X_target_shape, y_target_shape)
+
+	img_names = read_split_file("train-split.txt")
+	N = len(img_names)
+	N_train = int((1-validation_split)*N)
+	N_val = N-N_train
+	train_img_names = img_names[0:N_train]
+	val_img_names = img_names[N_train:N]
+
+	model.fit_generator(
+	    image_generator(train_img_names, train_batch_size, X_target_shape=X_target_shape, y_target_shape=y_target_shape),
+	    validation_data=image_generator(val_img_names, val_batch_size, X_target_shape=X_target_shape, y_target_shape=y_target_shape),
+	    validation_steps=1,
+	    steps_per_epoch=5, epochs=10, verbose=2)
